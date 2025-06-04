@@ -1,0 +1,32 @@
+# GCP Configuration
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+zone       = "us-central1-a"
+
+# Environment
+environment = "dev"
+
+# BigQuery Configuration
+dataset_id = "taxi_dataset"
+
+# Storage Configuration
+iceberg_bucket_name = "your-project-iceberg-data-dev"
+temp_bucket_name    = "your-project-temp-dev"
+
+# Pub/Sub Configuration
+pubsub_topic_name = "taxi-trips-stream"
+
+# Dataflow Configuration
+dataflow_max_workers  = 20
+dataflow_machine_type = "n1-standard-4"
+
+# Cross-Cloud Configuration (Optional)
+enable_cross_cloud = false
+aws_account_id     = "123456789012"
+
+# Maintenance Configuration
+snapshot_retention_days = 7
+
+# Monitoring Configuration
+enable_monitoring = true
+alert_email       = "your-email@example.com" 

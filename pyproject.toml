@@ -1,0 +1,66 @@
+[tool.poetry]
+name = "dt-gcp-lakehouse-iceberg"
+version = "0.1.0"
+description = "GCP Data Lakehouse with Apache Iceberg and Cross-Cloud Analytics"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.13"
+# Google Cloud Platform libraries
+google-cloud-bigquery = "3.13.0"
+google-cloud-storage = "2.10.0"
+google-cloud-pubsub = "2.18.4"
+google-cloud-monitoring = "2.16.0"
+google-cloud-logging = "3.8.0"
+# Apache Beam for Dataflow
+apache-beam = {extras = ["gcp"], version = "2.51.0"}
+# Data processing and utilities
+pandas = "2.0.3"
+numpy = "1.24.4"
+pyarrow = "11.0.0"
+# Scheduling and automation
+schedule = "1.2.0"
+# Configuration and environment
+python-dotenv = "1.0.0"
+# Additional utilities
+requests = "2.31.0"
+pyyaml = "6.0.1"
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "7.4.3"
+pytest-mock = "3.12.0"
+# Development tools
+black = "23.11.0"
+flake8 = "6.1.0"
+mypy = "1.7.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true 
