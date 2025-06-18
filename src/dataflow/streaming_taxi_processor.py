@@ -1,88 +1,101 @@
 """
-Streaming Dataflow pipeline for processing real-time NYC taxi data
+Streaming Dataflow Flex Template for processing real-time NYC taxi data
 from Pub/Sub and writing to BigLake Iceberg tables.
 """
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
+from apache_beam.options.value_provider import RuntimeValueProvider
 from apache_beam.io.gcp.pubsub import ReadFromPubSub
 from apache_beam.io.gcp.bigquery import WriteToBigQuery
 import json
 from datetime import datetime
 import uuid
 import logging
+import argparse
 
 
-class ProcessLiveTaxiTrip(beam.DoFn):
-    """Process real-time taxi trip completion events."""
+class ParseTaxiMessage(beam.DoFn):
+    """Parse Pub/Sub message and validate taxi trip data."""
     
     def process(self, element):
         try:
-            # Parse JSON message from Pub/Sub
-            trip_data = json.loads(element.decode('utf-8'))
+            # Parse JSON message
+            if isinstance(element, bytes):
+                message_data = element.decode('utf-8')
+            else:
+                message_data = element
             
-            # Enrich with processing metadata
-            record = {
-                'trip_id': trip_data.get('trip_id', str(uuid.uuid4())),
-                'vendor_id': trip_data.get('vendor_id', 1),
-                'pickup_datetime': trip_data['pickup_datetime'],
-                'dropoff_datetime': trip_data['dropoff_datetime'],
-                'passenger_count': trip_data.get('passenger_count', 1),
-                'trip_distance': float(trip_data.get('trip_distance', 0)),
-                'pickup_longitude': float(trip_data.get('pickup_longitude', 0)),
-                'pickup_latitude': float(trip_data.get('pickup_latitude', 0)),
-                'dropoff_longitude': float(trip_data.get('dropoff_longitude', 0)),
-                'dropoff_latitude': float(trip_data.get('dropoff_latitude', 0)),
-                'payment_type': trip_data.get('payment_type', 'card'),
-                'fare_amount': float(trip_data.get('fare_amount', 0)),
-                'extra': float(trip_data.get('extra', 0)),
-                'mta_tax': float(trip_data.get('mta_tax', 0.5)),
-                'tip_amount': float(trip_data.get('tip_amount', 0)),
-                'tolls_amount': float(trip_data.get('tolls_amount', 0)),
-                'total_amount': float(trip_data.get('total_amount', 0)),
-                'pickup_location_id': trip_data.get('pickup_location_id'),
-                'dropoff_location_id': trip_data.get('dropoff_location_id'),
-                'created_at': datetime.now().isoformat()
-            }
+            record = json.loads(message_data)
             
-            # Validate essential fields
-            if (record['pickup_datetime'] and record['dropoff_datetime'] and
-                record['total_amount'] > 0):
+            # Validate required fields
+            required_fields = ['pickup_datetime', 'dropoff_datetime', 'trip_distance', 'total_amount']
+            for field in required_fields:
+                if field not in record or record[field] is None:
+                    yield beam.pvalue.TaggedOutput('invalid', {
+                        'error': f'Missing required field: {field}', 
+                        'record': record,
+                        'error_type': 'missing_field',
+                        'pipeline_name': 'streaming_taxi_processor'
+                    })
+                    return
+            
+            # Ensure trip_id exists
+            if 'trip_id' not in record:
+                record['trip_id'] = f"stream_{uuid.uuid4()}"
+            
+            # Add processing timestamp
+            record['created_at'] = datetime.now().isoformat()
+            
+            # Data validation
+            if (record['trip_distance'] > 0 and record['total_amount'] > 0):
                 yield record
             else:
-                yield beam.pvalue.TaggedOutput('dead_letter', {
-                    'error': 'Invalid trip data',
+                yield beam.pvalue.TaggedOutput('invalid', {
+                    'error': 'Invalid trip data (distance or amount <= 0)', 
+                    'record': record,
                     'error_type': 'validation_failed',
-                    'pipeline_name': 'streaming_taxi_processor',
-                    'source_data': trip_data
+                    'pipeline_name': 'streaming_taxi_processor'
                 })
                 
+        except json.JSONDecodeError as e:
+            yield beam.pvalue.TaggedOutput('invalid', {
+                'error': f'JSON parsing error: {str(e)}', 
+                'record': element,
+                'error_type': 'json_parsing_failed',
+                'pipeline_name': 'streaming_taxi_processor'
+            })
         except Exception as e:
-            yield beam.pvalue.TaggedOutput('dead_letter', {
-                'error': str(e), 
-                'error_type': 'parsing_failed',
-                'pipeline_name': 'streaming_taxi_processor',
-                'message': element.decode('utf-8', errors='ignore')
+            yield beam.pvalue.TaggedOutput('invalid', {
+                'error': f'Unexpected error: {str(e)}', 
+                'record': element,
+                'error_type': 'unexpected_error',
+                'pipeline_name': 'streaming_taxi_processor'
             })
 
 
-class CalculateHourlyStats(beam.DoFn):
-    """Calculate hourly aggregations for real-time monitoring."""
+class CalculateWindowedStats(beam.DoFn):
+    """Calculate windowed aggregations from trip data."""
     
     def process(self, element, window=beam.DoFn.WindowParam):
-        pickup_time = datetime.fromisoformat(element['pickup_datetime'].replace('Z', '+00:00'))
-        stat_hour = pickup_time.replace(minute=0, second=0, microsecond=0)
-        
-        yield {
-            'stat_hour': stat_hour.isoformat(),
-            'pickup_location_id': element.get('pickup_location_id', 0),
-            'trip_count': 1,
-            'total_fare': element['fare_amount'],
-            'total_distance': element['trip_distance'],
-            'trip_duration_minutes': self._calculate_duration(element),
-            'total_revenue': element['total_amount'],
-            'created_at': datetime.now().isoformat()
-        }
+        try:
+            pickup_time = datetime.fromisoformat(element['pickup_datetime'].replace('Z', '+00:00'))
+            
+            yield {
+                'window_start': window.start.to_utc_datetime().isoformat(),
+                'window_end': window.end.to_utc_datetime().isoformat(),
+                'pickup_location_id': element.get('pickup_location_id', 0),
+                'trip_count': 1,
+                'total_fare': element.get('fare_amount', 0.0),
+                'total_distance': element.get('trip_distance', 0.0),
+                'trip_duration_minutes': self._calculate_duration(element),
+                'total_revenue': element.get('total_amount', 0.0),
+                'created_at': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logging.error(f"Error calculating windowed stats: {e}")
+            # Skip invalid records for stats
+            pass
     
     def _calculate_duration(self, trip):
         """Calculate trip duration in minutes."""
@@ -94,134 +107,108 @@ class CalculateHourlyStats(beam.DoFn):
             return 0
 
 
-class AggregateHourlyStats(beam.DoFn):
-    """Aggregate hourly statistics from individual trip events."""
+def run():
+    """Main entry point for the Flex Template."""
     
-    def process(self, element):
-        key, values = element
-        stat_hour, pickup_location_id = key
-        
-        values_list = list(values)
-        trip_count = len(values_list)
-        
-        if trip_count > 0:
-            yield {
-                'stat_hour': stat_hour,
-                'pickup_location_id': pickup_location_id,
-                'trip_count': trip_count,
-                'avg_fare_amount': sum(item['total_fare'] for item in values_list) / trip_count,
-                'avg_trip_distance': sum(item['total_distance'] for item in values_list) / trip_count,
-                'avg_trip_duration_minutes': sum(item['trip_duration_minutes'] for item in values_list) / trip_count,
-                'total_revenue': sum(item['total_revenue'] for item in values_list),
-                'created_at': datetime.now().isoformat()
-            }
-
-
-def run_streaming_pipeline(project_id, subscription_name, dataset_id, temp_location, staging_location):
-    """Process real-time taxi trip events."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--subscription_name', required=True, help='Pub/Sub subscription path')
+    parser.add_argument('--project_id', required=True, help='GCP Project ID')
+    parser.add_argument('--dataset_id', required=True, help='BigQuery dataset ID')
+    parser.add_argument('--table_name', default='taxi_trips', help='Target table name')
+    parser.add_argument('--window_size', type=int, default=60, help='Window size in seconds')
     
-    pipeline_options = PipelineOptions([
-        '--runner=DataflowRunner',
-        f'--project={project_id}',
-        '--region=us-central1',
-        '--streaming=true',
-        f'--temp_location={temp_location}',
-        f'--staging_location={staging_location}',
-        '--max_num_workers=10',
-        '--autoscaling_algorithm=THROUGHPUT_BASED',
-        '--enable_streaming_engine=true',
-        '--use_public_ips=false'
-    ])
+    known_args, pipeline_args = parser.parse_known_args()
+    
+    # Set up pipeline options for streaming
+    pipeline_options = PipelineOptions(pipeline_args)
+    
+    # Use RuntimeValueProvider for template parameters
+    subscription_name = (RuntimeValueProvider.get_value('subscription_name', str, known_args.subscription_name)
+                        if hasattr(RuntimeValueProvider, 'get_value')
+                        else known_args.subscription_name)
+    
+    project_id = (RuntimeValueProvider.get_value('project_id', str, known_args.project_id)
+                  if hasattr(RuntimeValueProvider, 'get_value')
+                  else known_args.project_id)
+    
+    dataset_id = (RuntimeValueProvider.get_value('dataset_id', str, known_args.dataset_id)
+                  if hasattr(RuntimeValueProvider, 'get_value')
+                  else known_args.dataset_id)
+    
+    table_name = (RuntimeValueProvider.get_value('table_name', str, known_args.table_name)
+                  if hasattr(RuntimeValueProvider, 'get_value')
+                  else known_args.table_name)
+    
+    window_size = (RuntimeValueProvider.get_value('window_size', int, known_args.window_size)
+                   if hasattr(RuntimeValueProvider, 'get_value')
+                   else known_args.window_size)
     
     with beam.Pipeline(options=pipeline_options) as pipeline:
         
         # Read from Pub/Sub subscription
         messages = (
             pipeline
-            | 'Read from Pub/Sub' >> ReadFromPubSub(
-                subscription=f'projects/{project_id}/subscriptions/{subscription_name}'
-            )
+            | 'Read from Pub/Sub' >> ReadFromPubSub(subscription=subscription_name)
         )
         
-        # Process trip completion events
-        processed_trips = (
+        # Parse and validate messages
+        processed = (
             messages
-            | 'Process Trip Events' >> beam.ParDo(ProcessLiveTaxiTrip()).with_outputs(
-                'dead_letter', main='processed'
+            | 'Parse Messages' >> beam.ParDo(ParseTaxiMessage()).with_outputs(
+                'invalid', main='valid'
             )
         )
         
-        # Write individual trips to Iceberg table
+        # Write valid records to Iceberg table
         (
-            processed_trips.processed
-            | 'Write Trips to Iceberg' >> WriteToBigQuery(
-                table=f'{project_id}.{dataset_id}.taxi_trips',
+            processed.valid
+            | 'Write to Iceberg' >> WriteToBigQuery(
+                table=f'{project_id}.{dataset_id}.{table_name}',
                 write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
                 create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER
             )
         )
         
-        # Calculate and write hourly stats
-        hourly_stats = (
-            processed_trips.processed
-            | 'Add Timestamp' >> beam.Map(lambda x: beam.window.TimestampedValue(
-                x, 
-                datetime.fromisoformat(x['pickup_datetime'].replace('Z', '+00:00')).timestamp()
-            ))
-            | 'Window into Hours' >> beam.WindowInto(beam.window.FixedWindows(3600))  # 1 hour
-            | 'Calculate Stats' >> beam.ParDo(CalculateHourlyStats())
-            | 'Key by Location and Hour' >> beam.Map(lambda x: (
-                (x['stat_hour'], x['pickup_location_id']), x
-            ))
-            | 'Group by Key' >> beam.GroupByKey()
-            | 'Aggregate Stats' >> beam.ParDo(AggregateHourlyStats())
-        )
-        
-        (
-            hourly_stats
-            | 'Write Stats to Iceberg' >> WriteToBigQuery(
-                table=f'{project_id}.{dataset_id}.hourly_trip_stats',
-                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER
-            )
-        )
-        
-        # Handle dead letter queue
-        (
-            processed_trips.dead_letter
-            | 'Format Dead Letter Records' >> beam.Map(lambda error: {
-                'error_type': error.get('error_type', 'unknown'),
-                'error_message': error.get('error', 'Unknown error'),
-                'source_data': str(error.get('source_data', error.get('message', ''))),
-                'pipeline_name': error.get('pipeline_name', 'streaming_taxi_processor'),
-                'retry_count': 0
+        # Calculate windowed stats
+        windowed_stats = (
+            processed.valid
+            | 'Apply Fixed Windows' >> beam.WindowInto(beam.window.FixedWindows(window_size))
+            | 'Calculate Windowed Stats' >> beam.ParDo(CalculateWindowedStats())
+            | 'Group by Window and Location' >> beam.GroupBy('window_start', 'pickup_location_id')
+            | 'Aggregate Windowed Stats' >> beam.Map(lambda group: {
+                'window_start': group.key[0],
+                'pickup_location_id': group.key[1],
+                'trip_count': sum(item['trip_count'] for item in group.value),
+                'avg_fare_amount': sum(item['total_fare'] for item in group.value) / len(group.value) if group.value else 0,
+                'avg_trip_distance': sum(item['total_distance'] for item in group.value) / len(group.value) if group.value else 0,
+                'avg_trip_duration_minutes': sum(item['trip_duration_minutes'] for item in group.value) / len(group.value) if group.value else 0,
+                'total_revenue': sum(item['total_revenue'] for item in group.value),
+                'created_at': datetime.now().isoformat()
             })
-            | 'Write Dead Letters' >> WriteToBigQuery(
+        )
+        
+        # Write windowed stats to Iceberg table
+        (
+            windowed_stats
+            | 'Write Windowed Stats' >> WriteToBigQuery(
+                table=f'{project_id}.{dataset_id}.windowed_trip_stats',
+                write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED
+            )
+        )
+        
+        # Write invalid records to error table for monitoring
+        (
+            processed.invalid
+            | 'Write Errors' >> WriteToBigQuery(
                 table=f'{project_id}.{dataset_id}.processing_errors',
                 write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                create_disposition=beam.io.BigQueryDisposition.CREATE_NEVER
+                create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+                schema='error:STRING,record:STRING,error_type:STRING,pipeline_name:STRING,created_at:TIMESTAMP'
             )
         )
 
 
 if __name__ == '__main__':
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Streaming taxi data processor')
-    parser.add_argument('--project_id', required=True, help='GCP Project ID')
-    parser.add_argument('--subscription_name', required=True, help='Pub/Sub subscription name')
-    parser.add_argument('--dataset_id', default='taxi_dataset', help='BigQuery dataset ID')
-    parser.add_argument('--temp_location', required=True, help='Temp GCS location')
-    parser.add_argument('--staging_location', required=True, help='Staging GCS location')
-    
-    args = parser.parse_args()
-    
-    logging.basicConfig(level=logging.INFO)
-    
-    run_streaming_pipeline(
-        project_id=args.project_id,
-        subscription_name=args.subscription_name,
-        dataset_id=args.dataset_id,
-        temp_location=args.temp_location,
-        staging_location=args.staging_location
-    ) 
+    logging.getLogger().setLevel(logging.INFO)
+    run() 

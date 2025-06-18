@@ -1,0 +1,42 @@
+{
+  "name": "Streaming Taxi Trip Processor",
+  "description": "Processes real-time taxi trip data from Pub/Sub and loads into BigQuery Iceberg tables",
+  "parameters": [
+    {
+      "name": "subscription_name",
+      "label": "Pub/Sub Subscription",
+      "helpText": "Full Pub/Sub subscription path (e.g., projects/PROJECT/subscriptions/SUBSCRIPTION)",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^projects/[^/]+/subscriptions/[^/]+$"]
+    },
+    {
+      "name": "project_id",
+      "label": "GCP Project ID",
+      "helpText": "Google Cloud Project ID where BigQuery dataset is located",
+      "paramType": "TEXT",
+      "isOptional": false
+    },
+    {
+      "name": "dataset_id",
+      "label": "BigQuery Dataset ID",
+      "helpText": "BigQuery dataset ID containing the Iceberg tables",
+      "paramType": "TEXT",
+      "isOptional": false
+    },
+    {
+      "name": "table_name",
+      "label": "Target Table Name",
+      "helpText": "Name of the target BigQuery table (default: taxi_trips)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "window_size",
+      "label": "Window Size (seconds)",
+      "helpText": "Window size for streaming aggregations in seconds (default: 60)",
+      "paramType": "TEXT",
+      "isOptional": true
+    }
+  ]
+} 

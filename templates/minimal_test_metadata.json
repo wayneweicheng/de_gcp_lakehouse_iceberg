@@ -1,0 +1,21 @@
+{
+  "name": "Minimal Test Pipeline",
+  "description": "A minimal test pipeline for debugging Dataflow Flex Template issues",
+  "parameters": [
+    {
+      "name": "output_path",
+      "label": "Output Path",
+      "helpText": "GCS path for output files (e.g., gs://bucket/path/output)",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^gs://[^/]+/.+$"]
+    },
+    {
+      "name": "test_message",
+      "label": "Test Message",
+      "helpText": "Test message to include in output",
+      "paramType": "TEXT",
+      "isOptional": true
+    }
+  ]
+} 

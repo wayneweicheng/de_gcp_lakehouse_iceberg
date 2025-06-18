@@ -1,0 +1,42 @@
+{
+  "name": "Batch Taxi Trip Processor",
+  "description": "Processes batch taxi trip data files and loads them into BigQuery Iceberg tables",
+  "parameters": [
+    {
+      "name": "input_files",
+      "label": "Input Files Pattern",
+      "helpText": "GCS path pattern for input files (e.g., gs://bucket/path/*.json)",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^gs://[^/]+/.+$"]
+    },
+    {
+      "name": "project_id",
+      "label": "GCP Project ID",
+      "helpText": "Google Cloud Project ID where BigQuery dataset is located",
+      "paramType": "TEXT",
+      "isOptional": false
+    },
+    {
+      "name": "dataset_id",
+      "label": "BigQuery Dataset ID",
+      "helpText": "BigQuery dataset ID containing the Iceberg tables",
+      "paramType": "TEXT",
+      "isOptional": false
+    },
+    {
+      "name": "table_name",
+      "label": "Target Table Name",
+      "helpText": "Name of the target BigQuery table (default: taxi_trips)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "batch_size",
+      "label": "Batch Size",
+      "helpText": "Number of records to process in each batch (default: 1000)",
+      "paramType": "TEXT",
+      "isOptional": true
+    }
+  ]
+} 

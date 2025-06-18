@@ -1,0 +1,13 @@
+google-cloud-bigquery==3.13.0
+google-cloud-storage==2.10.0
+google-cloud-pubsub==2.18.4
+google-cloud-monitoring==2.16.0
+google-cloud-logging==3.8.0
+apache-beam[gcp]==2.51.0
+pandas==2.0.3
+numpy==1.24.4
+pyarrow==11.0.0
+schedule==1.2.0
+python-dotenv==1.0.0
+requests==2.31.0
+pyyaml==6.0.1 

@@ -20,10 +20,9 @@ CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.taxi_trips`
   total_amount NUMERIC,
   pickup_location_id INT64,
   dropoff_location_id INT64,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP
 )
-PARTITION BY DATE(pickup_datetime)
-CLUSTER BY pickup_location_id, payment_type
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/taxi_trips',
@@ -40,10 +39,9 @@ CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.hourly_trip_stats`
   avg_trip_distance NUMERIC,
   avg_trip_duration_minutes NUMERIC,
   total_revenue NUMERIC,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP
 )
-PARTITION BY DATE(stat_hour)
-CLUSTER BY pickup_location_id
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/hourly_trip_stats',
@@ -58,8 +56,9 @@ CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.taxi_zones`
   zone_name STRING,
   service_zone STRING,
   geometry STRING,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP
 )
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/taxi_zones',
@@ -69,15 +68,15 @@ OPTIONS (
 -- Create error tracking table
 CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.processing_errors`
 (
-  error_id STRING DEFAULT GENERATE_UUID(),
-  error_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+  error_id STRING,
+  error_timestamp TIMESTAMP,
   error_type STRING,
   error_message STRING,
   source_data STRING,
   pipeline_name STRING,
-  retry_count INT64 DEFAULT 0
+  retry_count INT64
 )
-PARTITION BY DATE(error_timestamp)
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/processing_errors',
@@ -87,14 +86,15 @@ OPTIONS (
 -- Create schema evolution log table
 CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.schema_evolution_log`
 (
-  evolution_id STRING DEFAULT GENERATE_UUID(),
+  evolution_id STRING,
   table_name STRING,
   change_type STRING,
   change_description STRING,
-  applied_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
+  applied_timestamp TIMESTAMP,
   applied_by STRING,
   rollback_script STRING
 )
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/schema_evolution_log',
@@ -145,14 +145,8 @@ AS SELECT
   dropoff_location_id
 FROM `${PROJECT_ID}.${DATASET_ID}.taxi_trips`;
 
--- Create materialized view for common aggregations
-CREATE MATERIALIZED VIEW `${PROJECT_ID}.${DATASET_ID}.daily_zone_stats`
-PARTITION BY stat_date
-CLUSTER BY pickup_location_id
-OPTIONS (
-  enable_refresh = true,
-  refresh_interval_minutes = 60
-)
+-- Create view for common aggregations
+CREATE OR REPLACE VIEW `${PROJECT_ID}.${DATASET_ID}.daily_zone_stats`
 AS
 SELECT 
   DATE(pickup_datetime) as stat_date,

@@ -131,7 +131,7 @@ resource "google_storage_bucket" "staging_bucket" {
 
 # BigLake Catalog
 resource "google_biglake_catalog" "iceberg_catalog" {
-  name     = "iceberg-catalog-${var.environment}"
+  name     = "iceberg_catalog_${var.environment}"
   location = var.region
   project  = var.project_id
 
@@ -156,6 +156,18 @@ resource "google_bigquery_dataset" "taxi_dataset" {
 # Pub/Sub Topic and Subscription
 resource "google_pubsub_topic" "data_ingestion" {
   name    = var.pubsub_topic_name
+  project = var.project_id
+
+  message_storage_policy {
+    allowed_persistence_regions = [var.region]
+  }
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Separate control topic for scheduler to avoid feedback loop
+resource "google_pubsub_topic" "data_control" {
+  name    = "taxi-data-control"
   project = var.project_id
 
   message_storage_policy {
@@ -244,9 +256,9 @@ resource "google_cloud_scheduler_job" "taxi_data_generator" {
   project     = var.project_id
 
   pubsub_target {
-    topic_name = google_pubsub_topic.data_ingestion.id
+    topic_name = google_pubsub_topic.data_control.id
     data = base64encode(jsonencode({
-      action = "generate_trips"
+      action = "generate_batch"
       count  = 10
     }))
   }
@@ -254,9 +266,36 @@ resource "google_cloud_scheduler_job" "taxi_data_generator" {
   depends_on = [google_project_service.required_apis]
 }
 
+# BigLake connection for Iceberg tables on GCS
+resource "google_bigquery_connection" "iceberg_gcs" {
+  connection_id = "iceberg-gcs-${var.environment}"
+  location      = var.region
+  description   = "Connection to GCS for Iceberg tables"
+  project       = var.project_id
+
+  cloud_resource {}
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# Grant BigQuery connection service account access to GCS buckets
+resource "google_storage_bucket_iam_member" "iceberg_connection_access" {
+  bucket = google_storage_bucket.iceberg_data.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${google_bigquery_connection.iceberg_gcs.cloud_resource[0].service_account_id}"
+}
+
+resource "google_storage_bucket_iam_member" "iceberg_connection_temp_access" {
+  bucket = google_storage_bucket.temp_bucket.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${google_bigquery_connection.iceberg_gcs.cloud_resource[0].service_account_id}"
+}
+
 # Cross-cloud resources (conditional)
+# Note: AWS BigQuery Omni is only available in specific regions
+# For australia-southeast1, we'll skip the AWS connection
 resource "google_bigquery_connection" "aws_omni" {
-  count         = var.enable_cross_cloud ? 1 : 0
+  count         = var.enable_cross_cloud && contains(["us-central1", "us-east1", "us-west1", "us-west2", "europe-west1", "europe-west2", "asia-southeast1", "asia-northeast1"], var.region) ? 1 : 0
   connection_id = "aws-taxi-omni-${var.environment}"
   location      = var.region
   description   = "Connection to AWS S3 for external taxi data"
@@ -285,38 +324,40 @@ resource "google_monitoring_notification_channel" "email" {
   depends_on = [google_project_service.required_apis]
 }
 
-resource "google_monitoring_alert_policy" "dataflow_job_failed" {
-  count        = var.enable_monitoring ? 1 : 0
-  display_name = "Dataflow Job Failed"
-  project      = var.project_id
-
-  conditions {
-    display_name = "Dataflow job failure rate"
-
-    condition_threshold {
-      filter          = "resource.type=\"dataflow_job\""
-      comparison      = "COMPARISON_GREATER_THAN"
-      threshold_value = 0
-      duration        = "300s"
-
-      aggregations {
-        alignment_period     = "300s"
-        per_series_aligner   = "ALIGN_RATE"
-        cross_series_reducer = "REDUCE_SUM"
-        group_by_fields      = ["resource.label.job_name"]
-      }
-    }
-  }
-
-  combiner = "OR"
-  notification_channels = var.enable_monitoring && var.alert_email != "" ? [google_monitoring_notification_channel.email[0].id] : []
-
-  alert_strategy {
-    auto_close = "1800s"
-  }
-
-  depends_on = [google_project_service.required_apis]
-}
+# Dataflow monitoring alert - disabled for initial deployment
+# Enable this after Dataflow jobs are running and metrics are available
+# resource "google_monitoring_alert_policy" "dataflow_job_failed" {
+#   count        = var.enable_monitoring ? 1 : 0
+#   display_name = "Dataflow Job Failed"
+#   project      = var.project_id
+# 
+#   conditions {
+#     display_name = "Dataflow job failure rate"
+# 
+#     condition_threshold {
+#       filter          = "resource.type=\"dataflow_job\" AND metric.type=\"dataflow.googleapis.com/job/failed_element_count\""
+#       comparison      = "COMPARISON_GT"
+#       threshold_value = 0
+#       duration        = "300s"
+# 
+#       aggregations {
+#         alignment_period     = "300s"
+#         per_series_aligner   = "ALIGN_RATE"
+#         cross_series_reducer = "REDUCE_SUM"
+#         group_by_fields      = ["resource.label.job_name"]
+#       }
+#     }
+#   }
+# 
+#   combiner = "OR"
+#   notification_channels = var.enable_monitoring && var.alert_email != "" ? [google_monitoring_notification_channel.email[0].id] : []
+# 
+#   alert_strategy {
+#     auto_close = "1800s"
+#   }
+# 
+#   depends_on = [google_project_service.required_apis]
+# }
 
 # Outputs
 output "iceberg_bucket_name" {
@@ -347,4 +388,9 @@ output "dataflow_service_account" {
 output "biglake_catalog_name" {
   description = "BigLake catalog name"
   value       = google_biglake_catalog.iceberg_catalog.name
+}
+
+output "iceberg_connection_id" {
+  description = "BigQuery connection ID for Iceberg tables"
+  value       = google_bigquery_connection.iceberg_gcs.connection_id
 } 

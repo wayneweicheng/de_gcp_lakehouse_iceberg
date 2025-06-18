@@ -1,0 +1,28 @@
+{
+  "name": "Simple Batch Processor",
+  "description": "Simple test processor for debugging Dataflow Flex Templates",
+  "parameters": [
+    {
+      "name": "input_files",
+      "label": "Input Files Pattern",
+      "helpText": "GCS path pattern for input files (e.g., gs://bucket/path/*.json)",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^gs://[^/]+/.+$"]
+    },
+    {
+      "name": "project_id",
+      "label": "GCP Project ID",
+      "helpText": "Google Cloud Project ID",
+      "paramType": "TEXT",
+      "isOptional": false
+    },
+    {
+      "name": "dataset_id",
+      "label": "BigQuery Dataset ID",
+      "helpText": "BigQuery dataset ID",
+      "paramType": "TEXT",
+      "isOptional": false
+    }
+  ]
+} 

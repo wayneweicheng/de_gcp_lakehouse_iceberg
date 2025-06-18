@@ -1,6 +1,72 @@
-# GCP BigLake Iceberg Data Lakehouse
+# GCP Lakehouse Iceberg
 
-A comprehensive data lakehouse solution using Google BigLake as the metadata catalog for Apache Iceberg tables, with real-time data ingestion via Pub/Sub and Dataflow, and advanced data operations capabilities.
+A modern data lakehouse solution using Google Cloud Platform with Apache Iceberg tables.
+
+## Features
+
+- BigQuery Iceberg tables for ACID transactions
+- Real-time and batch data processing with Dataflow
+- Pub/Sub for streaming data ingestion
+- Cloud Functions for data generation
+- Terraform infrastructure as code
+
+## Architecture
+
+This project implements a complete data lakehouse on GCP using:
+
+- **Storage**: GCS buckets with Iceberg format
+- **Compute**: Dataflow for ETL processing
+- **Analytics**: BigQuery for querying
+- **Streaming**: Pub/Sub for real-time data
+- **Orchestration**: Cloud Scheduler and Cloud Functions
+
+## Getting Started
+
+1. Configure your environment variables in `.env`
+2. Run `./scripts/deploy.sh` to deploy the infrastructure
+3. Use the Dataflow Flex Templates for processing data
+
+## Flex Templates
+
+This project uses modern **Dataflow Flex Templates** with custom Docker images stored in **Artifact Registry**.
+
+### Available Templates
+
+- **Batch Processing**: `gs://your-bucket/flex-templates/batch-taxi-processor.json`
+- **Streaming Processing**: `gs://your-bucket/flex-templates/streaming-taxi-processor.json`
+
+### Building Templates
+
+```bash
+# Build all Flex Templates
+./scripts/build_flex_templates.sh
+```
+
+### Running Jobs
+
+```bash
+# Run batch processing job
+./scripts/run_batch_job.sh [input_files_pattern]
+
+# Run streaming processing job  
+./scripts/run_streaming_job.sh
+```
+
+### Manual Job Execution
+
+```bash
+# Batch job
+gcloud dataflow flex-template run "batch-taxi-$(date +%Y%m%d-%H%M%S)" \
+    --template-file-gcs-location="gs://your-bucket/flex-templates/batch-taxi-processor.json" \
+    --region="australia-southeast1" \
+    --parameters="input_files=gs://your-bucket/data/*,project_id=your-project,dataset_id=your-dataset"
+
+# Streaming job
+gcloud dataflow flex-template run "streaming-taxi-$(date +%Y%m%d-%H%M%S)" \
+    --template-file-gcs-location="gs://your-bucket/flex-templates/streaming-taxi-processor.json" \
+    --region="australia-southeast1" \
+    --parameters="subscription_name=projects/your-project/subscriptions/your-subscription,project_id=your-project,dataset_id=your-dataset"
+```
 
 ## 🏗️ Architecture Overview
 
