@@ -166,3 +166,4 @@ terraform/terraform.tfvars
 terraform/.terraform/
 terraform/terraform.tfstate.backup
 terraform/terraform.tfstate
+large_dataset/*.json

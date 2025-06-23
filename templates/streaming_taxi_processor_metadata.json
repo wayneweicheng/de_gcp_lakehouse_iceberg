@@ -1,7 +1,15 @@
 {
-  "name": "Streaming Taxi Trip Processor",
-  "description": "Processes real-time taxi trip data from Pub/Sub and loads into BigQuery Iceberg tables",
+  "name": "Unified Taxi Trip Processor (Streaming Mode)",
+  "description": "Processes real-time taxi trip data from Pub/Sub and loads into BigQuery Iceberg tables using the unified template",
   "parameters": [
+    {
+      "name": "mode",
+      "label": "Processing Mode",
+      "helpText": "Processing mode - must be 'streaming' for this template",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^streaming$"]
+    },
     {
       "name": "subscription_name",
       "label": "Pub/Sub Subscription",
@@ -35,6 +43,20 @@
       "name": "window_size",
       "label": "Window Size (seconds)",
       "helpText": "Window size for streaming aggregations in seconds (default: 60)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "data_source",
+      "label": "Data Source Type",
+      "helpText": "Type of data source (taxi, uber, lyft, etc.) for future extensibility",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "customer_id",
+      "label": "Customer ID",
+      "helpText": "Customer identifier for multi-tenant processing",
       "paramType": "TEXT",
       "isOptional": true
     }

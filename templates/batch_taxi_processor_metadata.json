@@ -1,7 +1,15 @@
 {
-  "name": "Batch Taxi Trip Processor",
-  "description": "Processes batch taxi trip data files and loads them into BigQuery Iceberg tables",
+  "name": "Unified Taxi Trip Processor (Batch Mode)",
+  "description": "Processes batch taxi trip data files and loads them into BigQuery Iceberg tables using the unified template",
   "parameters": [
+    {
+      "name": "mode",
+      "label": "Processing Mode",
+      "helpText": "Processing mode - must be 'batch' for this template",
+      "paramType": "TEXT",
+      "isOptional": false,
+      "regexes": ["^batch$"]
+    },
     {
       "name": "input_files",
       "label": "Input Files Pattern",
@@ -35,6 +43,20 @@
       "name": "batch_size",
       "label": "Batch Size",
       "helpText": "Number of records to process in each batch (default: 1000)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "data_source",
+      "label": "Data Source Type",
+      "helpText": "Type of data source (taxi, uber, lyft, etc.) for future extensibility",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "customer_id",
+      "label": "Customer ID",
+      "helpText": "Customer identifier for multi-tenant processing",
       "paramType": "TEXT",
       "isOptional": true
     }

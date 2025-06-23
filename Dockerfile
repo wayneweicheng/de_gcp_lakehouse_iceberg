@@ -10,7 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy only the files needed for the Dataflow template
 COPY main.py ./main.py
-COPY minimal_test.py ./minimal_test.py
 
 # Set the template entry point to main.py in root directory
 ENV FLEX_TEMPLATE_PYTHON_PY_FILE="/dataflow/template/main.py"
