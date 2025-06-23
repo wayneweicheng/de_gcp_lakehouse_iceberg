@@ -3,7 +3,7 @@ google-cloud-storage==2.10.0
 google-cloud-pubsub==2.18.4
 google-cloud-monitoring==2.16.0
 google-cloud-logging==3.8.0
-apache-beam[gcp]==2.51.0
+apache-beam[gcp]==2.53.0
 pandas==2.0.3
 numpy==1.24.4
 pyarrow==11.0.0

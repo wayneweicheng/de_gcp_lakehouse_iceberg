@@ -8,10 +8,9 @@ WORKDIR /dataflow/template
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY src/ ./src/
-COPY templates/ ./templates/
+# Copy only the files needed for the Dataflow template
 COPY main.py ./main.py
+COPY minimal_test.py ./minimal_test.py
 
 # Set the template entry point to main.py in root directory
 ENV FLEX_TEMPLATE_PYTHON_PY_FILE="/dataflow/template/main.py"
@@ -37,9 +36,6 @@ RUN mkdir -p /var/log/dataflow/template_launcher && \
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash dataflow
 RUN chown -R dataflow:dataflow /dataflow/template
-
-# Set Python path
-ENV PYTHONPATH=/dataflow/template
 
 # Keep running as root for template launcher compatibility
 # USER dataflow

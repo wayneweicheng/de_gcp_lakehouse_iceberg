@@ -11,11 +11,18 @@
       "regexes": ["^gs://[^/]+/.+$"]
     },
     {
-      "name": "test_message",
-      "label": "Test Message",
-      "helpText": "Test message to include in output",
+      "name": "project_id",
+      "label": "GCP Project ID",
+      "helpText": "Google Cloud Project ID",
       "paramType": "TEXT",
-      "isOptional": true
+      "isOptional": false
+    },
+    {
+      "name": "dataset_id",
+      "label": "BigQuery Dataset ID",
+      "helpText": "BigQuery dataset ID",
+      "paramType": "TEXT",
+      "isOptional": false
     }
   ]
 } 

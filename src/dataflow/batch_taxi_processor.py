@@ -105,24 +105,26 @@ class CalculateHourlyStats(beam.DoFn):
             return 0
 
 
-def run():
+def run(argv=None):
     """Main entry point for the Flex Template."""
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_files', required=True, help='Input file pattern')
-    parser.add_argument('--project_id', required=True, help='GCP Project ID')
     parser.add_argument('--dataset_id', required=True, help='BigQuery dataset ID')
     parser.add_argument('--table_name', default='taxi_trips', help='Target table name')
     parser.add_argument('--batch_size', type=int, default=1000, help='Batch size for processing')
+    # Note: project_id is handled by Apache Beam via --project
     
-    known_args, pipeline_args = parser.parse_known_args()
+    known_args, pipeline_args = parser.parse_known_args(argv)
     
     # Set up pipeline options
     pipeline_options = PipelineOptions(pipeline_args)
     
+    # Get project from pipeline options
+    project_id = pipeline_options.view_as(beam.options.pipeline_options.GoogleCloudOptions).project
+    
     # Use template parameters directly for Flex Templates
     input_files = known_args.input_files
-    project_id = known_args.project_id
     dataset_id = known_args.dataset_id
     table_name = known_args.table_name
     
