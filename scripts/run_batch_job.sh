@@ -36,7 +36,7 @@ try_launch_job() {
         --template-file-gcs-location="gs://$TEMP_BUCKET/flex-templates/batch-taxi-processor.json" \
         --region="$region" \
         --project="$PROJECT_ID" \
-        --parameters="mode=batch,input_files=$INPUT_FILES,project_id=$PROJECT_ID,dataset_id=$DATASET_ID,project=ark-of-data-2000" \
+        --parameters="mode=batch,input_files=$INPUT_FILES,project_id=$PROJECT_ID,dataset_id=$DATASET_ID" \
         --temp-location="gs://$TEMP_BUCKET/dataflow-temp" \
         --staging-location="gs://$TEMP_BUCKET/dataflow-staging" \
         --max-workers=3 \

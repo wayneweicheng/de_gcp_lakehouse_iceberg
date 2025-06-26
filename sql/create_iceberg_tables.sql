@@ -48,6 +48,27 @@ OPTIONS (
   description = 'Hourly aggregated taxi trip statistics'
 );
 
+-- Create windowed statistics table for streaming aggregations
+CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.windowed_trip_stats`
+(
+  stat_hour TIMESTAMP,
+  pickup_location_id INT64,
+  trip_count INT64,
+  avg_fare_amount NUMERIC,
+  avg_trip_distance NUMERIC,
+  avg_trip_duration_minutes NUMERIC,
+  total_revenue NUMERIC,
+  window_start TIMESTAMP,
+  window_end TIMESTAMP,
+  created_at TIMESTAMP
+)
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
+OPTIONS (
+  table_format = 'ICEBERG',
+  storage_uri = 'gs://${ICEBERG_BUCKET}/windowed_trip_stats',
+  description = 'Windowed aggregated taxi trip statistics for streaming pipeline'
+);
+
 -- Create location lookup table
 CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.taxi_zones`
 (

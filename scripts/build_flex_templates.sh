@@ -43,7 +43,7 @@ for var in "${required_vars[@]}"; do
 done
 
 # Set Docker image URL
-DOCKER_IMAGE="australia-southeast1-docker.pkg.dev/$PROJECT_ID/dataflow-templates/lakehouse-iceberg:latest"
+DOCKER_IMAGE="${REGION}-docker.pkg.dev/$PROJECT_ID/dataflow-templates/lakehouse-iceberg:latest"
 
 print_status "Building Flex Templates with Docker image: $DOCKER_IMAGE"
 

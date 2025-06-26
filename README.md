@@ -26,47 +26,296 @@ This project implements a complete data lakehouse on GCP using:
 2. Run `./scripts/deploy.sh` to deploy the infrastructure
 3. Use the Dataflow Flex Templates for processing data
 
-## Flex Templates
+## 🚀 Dataflow Job Execution
 
-This project uses modern **Dataflow Flex Templates** with custom Docker images stored in **Artifact Registry**.
+This project uses modern **Dataflow Flex Templates** with custom Docker images stored in **Artifact Registry**. The unified pipeline supports both batch and streaming modes with a single codebase.
 
 ### Available Templates
 
 - **Batch Processing**: `gs://your-bucket/flex-templates/batch-taxi-processor.json`
 - **Streaming Processing**: `gs://your-bucket/flex-templates/streaming-taxi-processor.json`
 
-### Building Templates
+### Prerequisites
+
+Before running any Dataflow jobs, ensure:
+
+1. **Required Tables Exist**: All BigQuery tables must be created first
+   ```bash
+   # Create all required tables (including windowed_trip_stats for streaming)
+   bq mk --table your-project:your-dataset.windowed_trip_stats \
+     stat_hour:TIMESTAMP,pickup_location_id:INTEGER,trip_count:INTEGER,avg_fare_amount:NUMERIC,avg_trip_distance:NUMERIC,avg_trip_duration_minutes:NUMERIC,total_revenue:NUMERIC,window_start:TIMESTAMP,window_end:TIMESTAMP,created_at:TIMESTAMP
+   ```
+
+2. **Docker Image Built**: Templates require the latest Docker image
+   ```bash
+   # Build and push Docker image
+   docker build -t your-region-docker.pkg.dev/your-project/dataflow-templates/lakehouse-iceberg:latest .
+   docker push your-region-docker.pkg.dev/your-project/dataflow-templates/lakehouse-iceberg:latest
+   ```
+
+3. **Flex Templates Built**: Templates must be up-to-date
+   ```bash
+   ./scripts/build_flex_templates.sh
+   ```
+
+### 📦 Batch Processing Jobs
+
+Batch jobs process historical data files from GCS and load them into BigQuery Iceberg tables.
+
+#### Quick Start - Batch Jobs
 
 ```bash
-# Build all Flex Templates
-./scripts/build_flex_templates.sh
+# Using the convenience script (recommended)
+./scripts/run_batch_job.sh
+
+# Or specify custom input files
+./scripts/run_batch_job.sh "gs://your-bucket/custom-data/*.json"
 ```
 
-### Running Jobs
+#### Manual Batch Job Execution
 
 ```bash
-# Run batch processing job
-./scripts/run_batch_job.sh [input_files_pattern]
+gcloud dataflow flex-template run "batch-taxi-$(date +%Y%m%d-%H%M%S)" \
+    --template-file-gcs-location="gs://your-temp-bucket/flex-templates/batch-taxi-processor.json" \
+    --region="your-region" \
+    --project="your-project" \
+    --parameters="mode=batch,input_files=gs://your-bucket/sample_data/*.json,project_id=your-project,dataset_id=your-dataset" \
+    --temp-location="gs://your-temp-bucket/dataflow-temp" \
+    --staging-location="gs://your-temp-bucket/dataflow-staging" \
+    --max-workers=5 \
+    --num-workers=2 \
+    --worker-machine-type=e2-standard-2
+```
 
-# Run streaming processing job  
+#### Batch Job Parameters
+
+| Parameter | Required | Description | Example |
+|-----------|----------|-------------|---------|
+| `mode` | ✅ | Must be "batch" | `batch` |
+| `input_files` | ✅ | GCS path pattern for input files | `gs://bucket/data/*.json` |
+| `project_id` | ✅ | GCP Project ID | `your-project-id` |
+| `dataset_id` | ✅ | BigQuery dataset ID | `taxi_dataset` |
+| `table_name` | ❌ | Target table name (default: taxi_trips) | `taxi_trips` |
+| `batch_size` | ❌ | Records per batch (default: 1000) | `1000` |
+
+### 🌊 Streaming Processing Jobs
+
+Streaming jobs continuously process real-time data from Pub/Sub and write to BigQuery with windowed aggregations.
+
+#### Quick Start - Streaming Jobs
+
+```bash
+# Using the convenience script (recommended)
 ./scripts/run_streaming_job.sh
 ```
 
-### Manual Job Execution
+#### Manual Streaming Job Execution
 
 ```bash
-# Batch job
-gcloud dataflow flex-template run "batch-taxi-$(date +%Y%m%d-%H%M%S)" \
-    --template-file-gcs-location="gs://your-bucket/flex-templates/batch-taxi-processor.json" \
-    --region="australia-southeast1" \
-    --parameters="input_files=gs://your-bucket/data/*,project_id=your-project,dataset_id=your-dataset"
-
-# Streaming job
 gcloud dataflow flex-template run "streaming-taxi-$(date +%Y%m%d-%H%M%S)" \
-    --template-file-gcs-location="gs://your-bucket/flex-templates/streaming-taxi-processor.json" \
-    --region="australia-southeast1" \
-    --parameters="subscription_name=projects/your-project/subscriptions/your-subscription,project_id=your-project,dataset_id=your-dataset"
+    --template-file-gcs-location="gs://your-temp-bucket/flex-templates/streaming-taxi-processor.json" \
+    --region="your-region" \
+    --project="your-project" \
+    --parameters="mode=streaming,subscription_name=projects/your-project/subscriptions/taxi-trips-subscription,project_id=your-project,dataset_id=your-dataset,window_size=60" \
+    --temp-location="gs://your-temp-bucket/dataflow-temp" \
+    --staging-location="gs://your-temp-bucket/dataflow-staging" \
+    --max-workers=3 \
+    --num-workers=1 \
+    --worker-machine-type=e2-standard-2 \
+    --enable-streaming-engine
 ```
+
+#### Streaming Job Parameters
+
+| Parameter | Required | Description | Example |
+|-----------|----------|-------------|---------|
+| `mode` | ✅ | Must be "streaming" | `streaming` |
+| `subscription_name` | ✅ | Full Pub/Sub subscription path | `projects/proj/subscriptions/taxi-trips-subscription` |
+| `project_id` | ✅ | GCP Project ID | `your-project-id` |
+| `dataset_id` | ✅ | BigQuery dataset ID | `taxi_dataset` |
+| `table_name` | ❌ | Target table name (default: taxi_trips) | `taxi_trips` |
+| `window_size` | ❌ | Window size in seconds (default: 60) | `60` |
+
+### 🔧 Local Development & Testing
+
+#### Running Locally with DataflowRunner
+
+For development and testing, you can run jobs locally while still using remote GCS and BigQuery:
+
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run batch job locally
+python main.py \
+    --mode=batch \
+    --input_files="gs://your-bucket/sample_data/*.json" \
+    --project_id=your-project \
+    --dataset_id=your-dataset \
+    --runner=DataflowRunner \
+    --project=your-project \
+    --region=your-region \
+    --temp_location="gs://your-temp-bucket/dataflow-temp" \
+    --staging_location="gs://your-temp-bucket/dataflow-staging"
+
+# Run streaming job locally (for testing)
+python main.py \
+    --mode=streaming \
+    --subscription_name="projects/your-project/subscriptions/taxi-trips-subscription" \
+    --project_id=your-project \
+    --dataset_id=your-dataset \
+    --runner=DataflowRunner \
+    --project=your-project \
+    --region=your-region \
+    --temp_location="gs://your-temp-bucket/dataflow-temp" \
+    --staging_location="gs://your-temp-bucket/dataflow-staging" \
+    --streaming
+```
+
+### 📊 Job Monitoring & Management
+
+#### Check Job Status
+
+```bash
+# List all jobs
+gcloud dataflow jobs list --region=your-region
+
+# Describe specific job
+gcloud dataflow jobs describe JOB_NAME --region=your-region
+
+# Get job status only
+gcloud dataflow jobs describe JOB_NAME --region=your-region --format="value(currentState)"
+
+# Monitor job in real-time
+watch 'gcloud dataflow jobs describe JOB_NAME --region=your-region --format="value(currentState)"'
+```
+
+#### Cancel Jobs
+
+```bash
+# Cancel a specific job
+gcloud dataflow jobs cancel JOB_NAME --region=your-region
+
+# Cancel all running jobs (use with caution!)
+gcloud dataflow jobs list --region=your-region --filter="state=JOB_STATE_RUNNING" --format="value(id)" | xargs -I {} gcloud dataflow jobs cancel {} --region=your-region
+```
+
+#### View Job Logs
+
+```bash
+# View job logs
+gcloud dataflow jobs describe JOB_NAME --region=your-region --format="value(jobMetadata.sdkVersion)"
+
+# Stream logs in real-time
+gcloud logging read "resource.type=dataflow_job AND resource.labels.job_name=JOB_NAME" --follow
+```
+
+### ⚠️ Important Tips & Pitfalls
+
+#### 🚨 Critical Requirements
+
+1. **Table Schema Alignment**: Ensure all required tables exist with correct schemas
+   - `taxi_trips` (main data table)
+   - `hourly_trip_stats` (batch aggregations)
+   - `windowed_trip_stats` (streaming aggregations) ⚠️ **Must exist before streaming jobs**
+
+2. **Field Compatibility**: Streaming data includes `event_timestamp` field that gets filtered out
+   - The pipeline automatically removes this field to match BigQuery schema
+   - Don't add `event_timestamp` to your BigQuery tables
+
+3. **Region Consistency**: All resources must be in the same region
+   - Dataflow jobs, GCS buckets, BigQuery dataset
+   - Use `--region` flag consistently across all commands
+
+#### 🐛 Common Pitfalls
+
+1. **Missing windowed_trip_stats Table**
+   ```
+   Error: Table requires a schema. None can be inferred because the table does not exist.
+   ```
+   **Solution**: Create the table before running streaming jobs
+   ```bash
+   bq mk --table your-project:your-dataset.windowed_trip_stats stat_hour:TIMESTAMP,pickup_location_id:INTEGER,trip_count:INTEGER,avg_fare_amount:NUMERIC,avg_trip_distance:NUMERIC,avg_trip_duration_minutes:NUMERIC,total_revenue:NUMERIC,window_start:TIMESTAMP,window_end:TIMESTAMP,created_at:TIMESTAMP
+   ```
+
+2. **Template Launch Failed: exit status 1**
+   - Usually indicates Docker image or base image issues
+   - Rebuild Docker image with `--no-cache` flag
+   - Ensure using correct base image: `gcr.io/dataflow-templates-base/python3-template-launcher-base:flex_templates_base_image_release_20250616_RC00`
+
+3. **Import Errors in Dataflow Workers**
+   ```
+   NameError: name 'datetime' is not defined
+   ```
+   **Solution**: The pipeline includes imports inside DoFn methods for worker compatibility
+
+4. **Permission Errors**
+   ```
+   User does not have sufficient permissions
+   ```
+   **Solution**: Ensure service account has required roles and use `--project` flag in gcloud commands
+
+5. **Subscription Not Found**
+   ```
+   Subscription does not exist
+   ```
+   **Solution**: Verify Pub/Sub subscription exists and use full path format
+   ```bash
+   gcloud pubsub subscriptions list
+   # Use: projects/your-project/subscriptions/subscription-name
+   ```
+
+#### 💡 Performance Tips
+
+1. **Batch Job Optimization**
+   - Use appropriate `--max-workers` based on data volume
+   - Set `--batch_size` parameter to optimize memory usage
+   - Use `--worker-machine-type=e2-standard-4` for large datasets
+
+2. **Streaming Job Optimization**
+   - Enable `--enable-streaming-engine` for better performance
+   - Adjust `window_size` parameter based on latency requirements
+   - Use `--worker-machine-type=e2-standard-2` for streaming workloads
+
+3. **Cost Optimization**
+   - Use preemptible workers: `--use-public-ips --enable-ip-alias`
+   - Set appropriate `--max-workers` to avoid over-provisioning
+   - Monitor job metrics to optimize resource allocation
+
+#### 🔄 Troubleshooting Workflow
+
+1. **Check Prerequisites**
+   ```bash
+   # Verify tables exist
+   bq ls your-dataset
+   
+   # Check Docker image
+   gcloud container images list --repository=your-region-docker.pkg.dev/your-project/dataflow-templates
+   
+   # Verify templates exist
+   gsutil ls gs://your-temp-bucket/flex-templates/
+   ```
+
+2. **Test Locally First**
+   ```bash
+   # Test with DirectRunner for quick validation
+   python main.py --mode=batch --input_files="gs://bucket/small-file.json" --runner=DirectRunner
+   ```
+
+3. **Check Job Details**
+   ```bash
+   # Get detailed job information
+   gcloud dataflow jobs describe JOB_NAME --region=your-region --format=json
+   ```
+
+4. **Review Logs**
+   ```bash
+   # Check worker logs for specific errors
+   gcloud logging read "resource.type=dataflow_job AND resource.labels.job_name=JOB_NAME AND severity>=ERROR" --limit=50
+   ```
 
 ## 🏗️ Architecture Overview
 

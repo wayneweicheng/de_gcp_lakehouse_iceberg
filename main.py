@@ -112,6 +112,10 @@ class ParseTaxiRecord(beam.DoFn):
                         # Money amounts: round to 2 decimal places
                         record[field] = round(float(record[field]), 2)
             
+            # Remove event_timestamp field if present (streaming data includes this but BigQuery table doesn't)
+            if 'event_timestamp' in record:
+                del record['event_timestamp']
+            
             # Add processing timestamp in BigQuery format
             record['created_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
             
