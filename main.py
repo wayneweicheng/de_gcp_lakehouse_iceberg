@@ -27,10 +27,11 @@ class ParseTaxiRecord(beam.DoFn):
         self.pipeline_mode = pipeline_mode
     
     def process(self, element):
-        import json
-        import uuid
+        # Import modules inside process method for Dataflow worker compatibility
         import apache_beam as beam
         from datetime import datetime
+        import json
+        import uuid
         
         try:
             # Handle different input formats based on mode
@@ -150,8 +151,10 @@ class CalculateHourlyStats(beam.DoFn):
         self.pipeline_mode = pipeline_mode
     
     def process(self, element, window=beam.DoFn.WindowParam):
-        import logging
+        # Import modules inside process method for Dataflow worker compatibility
+        import apache_beam as beam
         from datetime import datetime
+        import logging
         
         try:
             # Parse BigQuery timestamp format (YYYY-MM-DD HH:MM:SS UTC)
@@ -437,4 +440,4 @@ def run(argv=None):
 
 if __name__ == '__main__':
     logging.getLogger().setLevel(logging.INFO)
-    run() 
+    run()

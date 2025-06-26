@@ -35,7 +35,8 @@ try_launch_job() {
     if gcloud dataflow flex-template run "$JOB_NAME" \
         --template-file-gcs-location="gs://$TEMP_BUCKET/flex-templates/batch-taxi-processor.json" \
         --region="$region" \
-        --parameters="mode=batch,input_files=$INPUT_FILES,project_id=$PROJECT_ID,dataset_id=$DATASET_ID" \
+        --project="$PROJECT_ID" \
+        --parameters="mode=batch,input_files=$INPUT_FILES,project_id=$PROJECT_ID,dataset_id=$DATASET_ID,project=ark-of-data-2000" \
         --temp-location="gs://$TEMP_BUCKET/dataflow-temp" \
         --staging-location="gs://$TEMP_BUCKET/dataflow-staging" \
         --max-workers=3 \

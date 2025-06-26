@@ -56,6 +56,7 @@ print_status "Target dataset: $PROJECT_ID.$DATASET_ID"
 gcloud dataflow flex-template run "$JOB_NAME" \
     --template-file-gcs-location="gs://$TEMP_BUCKET/flex-templates/streaming-taxi-processor.json" \
     --region="$REGION" \
+    --project="$PROJECT_ID" \
     --parameters="subscription_name=$SUBSCRIPTION_PATH,project_id=$PROJECT_ID,dataset_id=$DATASET_ID,window_size=60" \
     --temp-location="gs://$TEMP_BUCKET/dataflow-temp" \
     --staging-location="gs://$TEMP_BUCKET/dataflow-staging" \

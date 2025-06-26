@@ -1,5 +1,5 @@
-# Use the official Dataflow Python base image for the correct architecture
-FROM gcr.io/dataflow-templates-base/python3-template-launcher-base
+# Use the specific working version of Dataflow Python base image
+FROM gcr.io/dataflow-templates-base/python3-template-launcher-base:flex_templates_base_image_release_20250616_RC00
 
 # Set working directory
 WORKDIR /dataflow/template
@@ -39,5 +39,5 @@ RUN chown -R dataflow:dataflow /dataflow/template
 # Keep running as root for template launcher compatibility
 # USER dataflow
 
-# Default command (will be overridden by Dataflow)
-CMD ["python", "-m", "src.dataflow.dataflow_template_test"] 
+# Default command (will be overridden by Dataflow template launcher)
+CMD ["python", "main.py"] 
