@@ -382,6 +382,16 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret
 ```
 
 ### 3. Deploy Infrastructure
+> **⚠️ IMPORTANT COST NOTICE**: This deployment creates a **Cloud Function with automated scheduling** that generates streaming data every few minutes for demonstration purposes. While Cloud Functions have a **generous monthly free tier** (2 million invocations, 400,000 GB-seconds, and 200,000 GHz-seconds), **you should disable the Cloud Scheduler trigger when finished learning** to prevent any potential costs.
+>
+> **To disable after learning**:
+> ```bash
+> # Disable the data generation scheduler
+> gcloud scheduler jobs pause taxi-data-generator --location=your-region
+> 
+> # Or delete it entirely
+> gcloud scheduler jobs delete taxi-data-generator --location=your-region
+> ```
 
 ```bash
 # Make deployment script executable
@@ -396,7 +406,7 @@ The deployment script will:
 2. Deploy Terraform infrastructure (creates all GCP resources automatically)
 3. Create BigQuery dataset and Iceberg tables
 4. Build and deploy Dataflow templates
-5. Set up Cloud Functions and Scheduler
+5. Set up Cloud Functions and Scheduler ⚠️ **Creates automated data generation**
 6. Start streaming pipeline
 7. Generate sample data
 
@@ -641,6 +651,64 @@ dt_gcp_lakehouse_iceberg/
 ├── pyproject.toml                       # Poetry dependencies and config
 ├── env.example                          # Environment template
 └── README.md                           # This file
+```
+
+## 💰 Cost Management & Resource Control
+
+### ⚠️ Automated Data Generation Costs
+
+This solution **automatically deploys a Cloud Function with scheduling** that generates streaming data for demonstration. Here's what you need to know:
+
+**Cloud Function Free Tier (Monthly)**:
+- 2 million function invocations
+- 400,000 GB-seconds of compute time
+- 200,000 GHz-seconds of compute time
+
+**Important Actions**:
+
+```bash
+# 1. PAUSE the scheduler when not actively learning (RECOMMENDED)
+gcloud scheduler jobs pause taxi-data-generator --location=your-region
+
+# 2. RESUME when you want to continue learning
+gcloud scheduler jobs resume taxi-data-generator --location=your-region
+
+# 3. DELETE entirely if you're done with the project
+gcloud scheduler jobs delete taxi-data-generator --location=your-region
+
+# 4. Check current scheduler status
+gcloud scheduler jobs list --location=your-region
+```
+
+### Other Cost Considerations
+
+**Dataflow Jobs**:
+- Streaming jobs run continuously until stopped
+- Batch jobs run on-demand and terminate automatically
+- Use `--max-workers` and `--worker-machine-type` to control costs
+
+```bash
+# Stop running streaming jobs
+gcloud dataflow jobs cancel JOB_NAME --region=your-region
+
+# List all running jobs
+gcloud dataflow jobs list --region=your-region --filter="state=JOB_STATE_RUNNING"
+```
+
+**Storage Costs**:
+- GCS buckets accumulate data over time
+- Set lifecycle policies in terraform for automatic cleanup
+- BigQuery storage costs scale with data volume
+
+**Monitoring Costs**:
+```bash
+# Check current GCP billing
+gcloud billing budgets list --billing-account=BILLING_ACCOUNT_ID
+
+# Set up budget alerts (recommended)
+gcloud billing budgets create --billing-account=BILLING_ACCOUNT_ID \
+  --display-name="Lakehouse Project Budget" \
+  --budget-amount=50 --currency=USD
 ```
 
 ## 🔒 Security & Permissions
