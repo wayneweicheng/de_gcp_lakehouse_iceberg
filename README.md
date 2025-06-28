@@ -22,8 +22,8 @@ This project implements a complete data lakehouse on GCP using:
 
 ## Getting Started
 
-1. Configure your environment variables in `.env`
-2. Run `./scripts/deploy.sh` to deploy the infrastructure
+1. Create .env using env.example, and configure your environment variables in `.env`
+2. Run `./scripts/deploy.sh` to deploy the infrastructure, PLEASE ALWAYS MAKE SURE YOU READ CODE DEPLOY CLOUD RESOURCES SO YOU UNDERSTAND SERVICES & API THAT ARE PROVISIONED.
 3. Use the Dataflow Flex Templates for processing data
 
 ## 🚀 Dataflow Job Execution
