@@ -1,6 +1,37 @@
 # GCP Lakehouse Iceberg
 
-A modern data lakehouse solution using Google Cloud Platform with Apache Iceberg tables.
+A comprehensive data lakehouse solution built on Google Cloud Platform with Apache Iceberg tables. This project demonstrates modern data engineering patterns, real-time analytics, and cloud-native architectures using NYC Taxi Trip data as a reference implementation.
+
+## 🎯 What You'll Learn
+
+This project provides hands-on experience with:
+
+- **Modern Data Architecture**: Implement a complete lakehouse pattern combining data lake flexibility with data warehouse performance
+- **Apache Iceberg**: Work with ACID transactions, time travel queries, schema evolution, and efficient data management
+- **Real-time & Batch Processing**: Build unified pipelines handling both streaming and historical data with Apache Beam/Dataflow
+- **Cloud-Native Engineering**: Deploy scalable infrastructure using Terraform, Docker, and GCP best practices
+- **Data Quality & Governance**: Implement automated maintenance, monitoring, and optimization strategies
+- **Cost Management**: Understand and control cloud costs while building production-grade systems
+
+## 🚀 Key Capabilities
+
+### Data Processing
+- **Unified Pipelines**: Single codebase for both batch and streaming with Apache Beam
+- **Auto-scaling**: Dataflow automatically scales workers based on data volume
+- **Fault Tolerance**: Built-in retry mechanisms and dead letter queues
+- **Schema Evolution**: Handle changing data structures without breaking existing queries
+
+### Analytics & Querying  
+- **BigQuery Integration**: Query Iceberg tables with full SQL support and BigQuery performance
+- **Time Travel**: Access historical versions of data for audit and recovery
+- **Real-time Dashboards**: Stream processing with windowed aggregations for live analytics
+- **Cross-Cloud Queries**: Optional AWS S3 integration for federated analytics
+
+### Operations & Maintenance
+- **Automated Optimization**: Scheduled compaction, file optimization, and cleanup
+- **Infrastructure as Code**: Complete Terraform deployment with zero manual setup
+- **Monitoring**: Built-in observability with Cloud Monitoring and custom metrics
+- **Cost Controls**: Guidance and tools for managing cloud spend
 
 ## Features
 
