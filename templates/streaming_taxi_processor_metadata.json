@@ -1,6 +1,6 @@
 {
   "name": "Unified Taxi Trip Processor (Streaming Mode)",
-  "description": "Processes real-time taxi trip data from Pub/Sub and loads into BigQuery Iceberg tables using the unified template",
+  "description": "Processes real-time taxi trip data from Pub/Sub with sliding window analytics and loads into BigQuery Iceberg tables",
   "parameters": [
     {
       "name": "mode",
@@ -45,6 +45,28 @@
       "helpText": "Window size for streaming aggregations in seconds (default: 60)",
       "paramType": "TEXT",
       "isOptional": true
+    },
+    {
+      "name": "sliding_window_size",
+      "label": "Sliding Window Size (seconds)",
+      "helpText": "Size of sliding windows for location analytics in seconds (default: 1800 = 30 minutes)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "sliding_window_period",
+      "label": "Sliding Window Period (seconds)",
+      "helpText": "Period between sliding window calculations in seconds (default: 30 = 30 seconds)",
+      "paramType": "TEXT",
+      "isOptional": true
+    },
+    {
+      "name": "enable_sliding_windows",
+      "label": "Enable Sliding Windows",
+      "helpText": "Enable sliding window analytics for location features (default: true)",
+      "paramType": "TEXT",
+      "isOptional": true,
+      "regexes": ["^(true|false)$"]
     },
     {
       "name": "data_source",

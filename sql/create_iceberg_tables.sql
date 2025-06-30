@@ -29,6 +29,67 @@ OPTIONS (
   description = 'NYC Taxi trip records with Iceberg format'
 );
 
+-- Create location features table for sliding window analytics
+CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.location_features_sliding_window`
+(
+  pickup_location_id INT64,
+  window_start TIMESTAMP,
+  window_end TIMESTAMP,
+  
+  -- Volume and velocity features
+  trip_count INT64,
+  demand_intensity_per_minute NUMERIC,
+  avg_inter_arrival_minutes NUMERIC,
+  
+  -- Revenue features
+  total_revenue NUMERIC,
+  avg_trip_amount NUMERIC,
+  std_trip_amount NUMERIC,
+  max_trip_amount NUMERIC,
+  min_trip_amount NUMERIC,
+  revenue_coefficient_variation NUMERIC,
+  
+  -- Distance features
+  total_distance NUMERIC,
+  avg_trip_distance NUMERIC,
+  std_trip_distance NUMERIC,
+  max_trip_distance NUMERIC,
+  
+  -- Duration features
+  avg_trip_duration_minutes NUMERIC,
+  std_trip_duration_minutes NUMERIC,
+  
+  -- Tip and service features
+  total_tips NUMERIC,
+  avg_tip_amount NUMERIC,
+  tip_percentage NUMERIC,
+  
+  -- Destination diversity
+  unique_dropoff_locations INT64,
+  destination_diversity_ratio NUMERIC,
+  
+  -- Temporal features
+  unique_hours_of_day INT64,
+  weekend_trip_count INT64,
+  weekend_trip_ratio NUMERIC,
+  rush_hour_trip_count INT64,
+  rush_hour_trip_ratio NUMERIC,
+  
+  -- Performance indicators
+  high_demand_flag BOOLEAN,
+  high_revenue_flag BOOLEAN,
+  long_distance_flag BOOLEAN,
+  premium_location_flag BOOLEAN,
+  
+  created_at TIMESTAMP
+)
+WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
+OPTIONS (
+  table_format = 'ICEBERG',
+  storage_uri = 'gs://${ICEBERG_BUCKET}/location_features_sliding_window',
+  description = 'Real-time location-based features from sliding window analysis for demand forecasting and anomaly detection'
+);
+
 -- Create aggregated table for hourly statistics
 CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.hourly_trip_stats`
 (
@@ -48,7 +109,7 @@ OPTIONS (
   description = 'Hourly aggregated taxi trip statistics'
 );
 
--- Create windowed statistics table for streaming aggregations
+-- Create windowed statistics table for streaming aggregations (legacy - kept for backward compatibility)
 CREATE TABLE `${PROJECT_ID}.${DATASET_ID}.windowed_trip_stats`
 (
   stat_hour TIMESTAMP,
@@ -66,7 +127,7 @@ WITH CONNECTION `${PROJECT_ID}.${REGION}.${CONNECTION_ID}`
 OPTIONS (
   table_format = 'ICEBERG',
   storage_uri = 'gs://${ICEBERG_BUCKET}/windowed_trip_stats',
-  description = 'Windowed aggregated taxi trip statistics for streaming pipeline'
+  description = 'Legacy windowed aggregated taxi trip statistics'
 );
 
 -- Create location lookup table
@@ -181,4 +242,78 @@ SELECT
   SUM(CASE WHEN tip_amount > 0 THEN 1 ELSE 0 END) / COUNT(*) as tip_percentage
 FROM `${PROJECT_ID}.${DATASET_ID}.taxi_trips`
 WHERE pickup_datetime >= '2020-01-01'
-GROUP BY stat_date, pickup_location_id; 
+GROUP BY stat_date, pickup_location_id;
+
+-- Create view for location demand analytics
+CREATE OR REPLACE VIEW `${PROJECT_ID}.${DATASET_ID}.location_demand_analytics`
+AS
+SELECT 
+  pickup_location_id,
+  window_start,
+  window_end,
+  trip_count,
+  demand_intensity_per_minute,
+  total_revenue,
+  avg_trip_amount,
+  destination_diversity_ratio,
+  rush_hour_trip_ratio,
+  weekend_trip_ratio,
+  high_demand_flag,
+  premium_location_flag,
+  
+  -- Calculate percentile rankings for comparative analysis
+  PERCENT_RANK() OVER (PARTITION BY pickup_location_id ORDER BY demand_intensity_per_minute) as demand_intensity_percentile,
+  PERCENT_RANK() OVER (PARTITION BY pickup_location_id ORDER BY total_revenue) as revenue_percentile,
+  PERCENT_RANK() OVER (PARTITION BY pickup_location_id ORDER BY trip_count) as volume_percentile,
+  
+  -- Rolling averages for trend analysis
+  AVG(demand_intensity_per_minute) OVER (
+    PARTITION BY pickup_location_id 
+    ORDER BY window_start 
+    ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+  ) as rolling_avg_demand_intensity,
+  
+  AVG(total_revenue) OVER (
+    PARTITION BY pickup_location_id 
+    ORDER BY window_start 
+    ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+  ) as rolling_avg_revenue,
+  
+  created_at
+FROM `${PROJECT_ID}.${DATASET_ID}.location_features_sliding_window`
+WHERE window_start >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR);
+
+-- Create view for real-time alerting and monitoring
+CREATE OR REPLACE VIEW `${PROJECT_ID}.${DATASET_ID}.real_time_location_alerts`
+AS
+SELECT 
+  pickup_location_id,
+  window_start,
+  window_end,
+  
+  -- Alert conditions
+  CASE 
+    WHEN high_demand_flag AND demand_intensity_per_minute > 2.0 THEN 'SURGE_DEMAND'
+    WHEN trip_count = 0 AND window_start > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR) THEN 'NO_ACTIVITY'
+    WHEN premium_location_flag AND avg_trip_amount > 50.0 THEN 'HIGH_VALUE_ZONE'
+    WHEN long_distance_flag AND max_trip_distance > 30.0 THEN 'LONG_DISTANCE_TRIPS'
+    ELSE 'NORMAL'
+  END as alert_type,
+  
+  -- Alert severity
+  CASE 
+    WHEN demand_intensity_per_minute > 3.0 THEN 'HIGH'
+    WHEN demand_intensity_per_minute > 1.5 THEN 'MEDIUM'
+    ELSE 'LOW'
+  END as alert_severity,
+  
+  trip_count,
+  demand_intensity_per_minute,
+  total_revenue,
+  avg_trip_amount,
+  destination_diversity_ratio,
+  created_at
+  
+FROM `${PROJECT_ID}.${DATASET_ID}.location_features_sliding_window`
+WHERE window_start >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 HOUR)
+  AND (high_demand_flag OR premium_location_flag OR long_distance_flag OR trip_count = 0); 
